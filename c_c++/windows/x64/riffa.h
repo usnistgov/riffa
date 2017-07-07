@@ -109,6 +109,8 @@ RIFFAAPI void RIFFACALL fpga_close(fpga_t * fpga);
  */
 RIFFAAPI int RIFFACALL fpga_send(fpga_t * fpga, int chnl, void * data, int len,
 	int destoff, int last, long long timeout);
+RIFFAAPI int RIFFACALL fpga_send_with_status(fpga_t * fpga, int chnl, void * data, int len,
+	int destoff, int last, long long timeout, int * sts);
 
 /**
  * Receives data from the FPGA channel chnl to the data pointer, using the
@@ -126,7 +128,8 @@ RIFFAAPI int RIFFACALL fpga_send(fpga_t * fpga, int chnl, void * data, int len,
  */
 RIFFAAPI int RIFFACALL fpga_recv(fpga_t * fpga, int chnl, void * data, int len,
 	long long timeout);
-
+RIFFAAPI int RIFFACALL fpga_recv_with_status(fpga_t * fpga, int chnl, void * data, int len,
+	long long timeout, int * sts);
 /**
  * Resets the state of the FPGA and all transfers across all channels. This is
  * meant to be used as an alternative to rebooting if an error occurs while
