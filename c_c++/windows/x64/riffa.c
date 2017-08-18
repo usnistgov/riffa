@@ -153,6 +153,60 @@ int RIFFACALL fpga_send(fpga_t * fpga, int chnl, void * data, int len,
 	return wordsReturned;
 }
 
+int RIFFACALL fpga_send_with_status(fpga_t * fpga, int chnl, void * data, int len,
+	int destoff, int last, long long timeout, int *sts) {
+	RIFFA_FPGA_CHNL_IO io;
+	OVERLAPPED overlapStruct = { 0 };
+	HANDLE evt;
+	BOOLEAN status;
+	ULONG wordsReturned;
+	*sts = 0; // Initialize status to 0 ( no error)
+
+	// Validate the device handle
+	if (fpga->dev == NULL || fpga->dev == INVALID_HANDLE_VALUE) {
+		printf("Invalid fpga_t device handle\n");
+		*sts = -1;
+		return 0;
+	}
+
+	// Initialize the RIFFA_FPGA_CHNL_IO struct
+	io.Id = fpga->id;
+	io.Chnl = chnl;
+	io.Length = len;
+	io.Offset = destoff;
+	io.Last = last;
+	io.Timeout = timeout;
+	
+	// Create a thread specific event to wait on.
+	evt = CreateEvent(NULL, TRUE, TRUE, NULL);
+	overlapStruct.hEvent = evt;
+
+	// Call IOCTL with IOCTL_RIFFA_SEND
+	status = DeviceIoControl(fpga->dev, IOCTL_RIFFA_SEND, (LPVOID)&io,
+		sizeof(io), data, (len << 2), &wordsReturned, &overlapStruct);
+	if (!status) {
+		// Should be the IO Pending error
+		if (GetLastError() == ERROR_IO_PENDING) {
+			// Wait for the IOCTL to complete and get the return value
+			WaitForSingleObject(evt, INFINITE);
+			status = GetOverlappedResult(fpga->dev, &overlapStruct,
+				&wordsReturned, FALSE);
+			if (!status) {
+				*sts = -2;
+				if (GetLastError() == ERROR_OPERATION_ABORTED)
+					printf("Operation timed out or was aborted\n");
+				else
+					printf("Error in GetOverlappedResult: %d\n", GetLastError());
+			}
+		}
+		else {
+			printf("Error in DeviceIoControl: %d\n", GetLastError());
+			*sts = -3;
+		}
+	}
+	return wordsReturned;
+}
+
 int RIFFACALL fpga_recv(fpga_t * fpga, int chnl, void * data, int len,
 	long long timeout) {
 	RIFFA_FPGA_CHNL_IO io;
@@ -195,6 +249,58 @@ int RIFFACALL fpga_recv(fpga_t * fpga, int chnl, void * data, int len,
 			}
 		}
 		else {
+			printf("Error in DeviceIoControl: %d\n", GetLastError());
+		}
+	}
+	return wordsReturned;
+}
+
+int RIFFACALL fpga_recv_with_status(fpga_t * fpga, int chnl, void * data, int len,
+	long long timeout, int * sts) {
+	RIFFA_FPGA_CHNL_IO io;
+	OVERLAPPED overlapStruct = { 0 };
+	HANDLE evt;
+	BOOLEAN status;
+	ULONG wordsReturned;
+	// Initialize status to 0
+	*sts = 0;
+	// Validate the device handle
+	if (fpga->dev == NULL || fpga->dev == INVALID_HANDLE_VALUE) {
+		printf("Invalid fpga_t device handle\n");
+		*sts = -1;
+		return 0;
+	}
+
+	// Initialize the RIFFA_FPGA_CHNL_IO struct
+	io.Id = fpga->id;
+	io.Chnl = chnl;
+	io.Length = len;
+	io.Timeout = timeout;
+
+	// Create a thread specific event to wait on.
+	evt = CreateEvent(NULL, TRUE, TRUE, NULL);
+	overlapStruct.hEvent = evt;
+
+	// Call IOCTL with IOCTL_RIFFA_RECV
+	status = DeviceIoControl(fpga->dev, IOCTL_RIFFA_RECV, (LPVOID)&io,
+		sizeof(io), data, (len << 2), &wordsReturned, &overlapStruct);
+	if (!status) {
+		// Should be the IO Pending error		
+		if (GetLastError() == ERROR_IO_PENDING) {
+			// Wait for the IOCTL to complete and get the return value			
+			WaitForSingleObject(evt, INFINITE);
+			status = GetOverlappedResult(fpga->dev, &overlapStruct,
+				&wordsReturned, FALSE);
+			if (!status) {
+				*sts = -2;
+				if (GetLastError() == ERROR_OPERATION_ABORTED)
+					printf("Operation timed out or was aborted\n");
+				else
+					printf("Error in GetOverlappedResult: %d\n", GetLastError());
+			}
+		}
+		else {
+			*sts = -3;
 			printf("Error in DeviceIoControl: %d\n", GetLastError());
 		}
 	}
