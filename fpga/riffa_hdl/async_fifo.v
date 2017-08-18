@@ -34,27 +34,25 @@
 // ----------------------------------------------------------------------
 //----------------------------------------------------------------------------
 // Filename:			async_fifo.v
-// Version:				1.00.a
+// Version:				0.0.1a
 // Verilog Standard:	Verilog-2001
 // Description:			Asynchronous capable parameterized FIFO. As with all
 // traditional FIFOs, the RD_DATA will be valid one cycle following a RD_EN 
-// assertion. RD_EMPTY will remain low until the cycle following the last RD_EN 
-// assertion. Note, that RD_EMPTY may actually be high on the same cycle that 
-// RD_DATA contains valid data.
-// Author:				Matt Jacobsen
+// assertion. 
+// Author:				Matt Jacobsen, modified by Gabe Ycas with code written by CE Cummings
 // History:				@mattj: Version 2.0
-// Additional Comments: Based on design by CE Cummings in Simulation and 
-// Synthesis Techniques for Asynchronous FIFO Design with Asynchronous Pointer 
-// Comparisons
+// Additional Comments: Based on design by CE Cummings in Simulation 
+// and Synthesis Techniques for Asynchronous FIFO Design
 //-----------------------------------------------------------------------------
 `timescale 1ns/1ns
+`include "functions.vh"
 module async_fifo #(
 	parameter C_WIDTH = 32,	// Data bus width
 	parameter C_DEPTH = 1024,	// Depth of the FIFO
 	// Local parameters
-	parameter C_REAL_DEPTH = 2**clog2(C_DEPTH),
-	parameter C_DEPTH_BITS = clog2(C_REAL_DEPTH),
-	parameter C_DEPTH_P1_BITS = clog2(C_REAL_DEPTH+1)
+	parameter C_REAL_DEPTH = 2**`clog2(C_DEPTH),
+	parameter C_DEPTH_BITS = `clog2(C_REAL_DEPTH),
+	parameter C_DEPTH_P1_BITS = `clog2(C_REAL_DEPTH+1)
 )
 (
 	input RD_CLK,							// Read clock
@@ -69,243 +67,127 @@ module async_fifo #(
 	output RD_EMPTY 						// Empty condition (RD_CLK)
 );
 
-`include "functions.vh"
 
-wire						wCmpEmpty;
-wire						wCmpFull;
-wire	[C_DEPTH_BITS-1:0]	wWrPtr;
-wire	[C_DEPTH_BITS-1:0]	wRdPtr;
-wire	[C_DEPTH_BITS-1:0]	wWrPtrP1;
-wire	[C_DEPTH_BITS-1:0]	wRdPtrP1;
 
+wire	[C_DEPTH_BITS-1:0]	waddr, raddr;
+wire	[C_DEPTH_BITS  :0]	wptr, rptr, wq2_rptr, rq2_wptr;
+
+sync_r2w #(.ADDRSIZE (C_DEPTH_BITS) )     sync_r2w  (.wq2_rptr(wq2_rptr), .rptr(rptr),
+                           .wclk(WR_CLK), .wrst(WR_RST));
+sync_w2r #(.ADDRSIZE (C_DEPTH_BITS) )     sync_w2r  (.rq2_wptr(rq2_wptr), .wptr(wptr),
+                           .rclk(RD_CLK), .rrst(RD_RST));
 
 // Memory block (synthesis attributes applied to this module will
 // determine the memory option).
 ram_2clk_1w_1r #(.C_RAM_WIDTH(C_WIDTH), .C_RAM_DEPTH(C_REAL_DEPTH)) mem (
 	.CLKA(WR_CLK),
-	.ADDRA(wWrPtr),
+	.ADDRA(waddr),
 	.WEA(WR_EN & !WR_FULL),
 	.DINA(WR_DATA),
 	.CLKB(RD_CLK),
-	.ADDRB(wRdPtr),
+	.ADDRB(raddr),
 	.DOUTB(RD_DATA)
 );
 
-
-// Compare the pointers.
-async_cmp #(.C_DEPTH_BITS(C_DEPTH_BITS)) asyncCompare (
-	.WR_RST(WR_RST),
-	.WR_CLK(WR_CLK),
-	.RD_RST(RD_RST),
-	.RD_CLK(RD_CLK),
-	.RD_VALID(RD_EN & !RD_EMPTY),
-	.WR_VALID(WR_EN & !WR_FULL),
-	.EMPTY(wCmpEmpty), 
-	.FULL(wCmpFull),
-	.WR_PTR(wWrPtr), 
-	.WR_PTR_P1(wWrPtrP1), 
-	.RD_PTR(wRdPtr), 
-	.RD_PTR_P1(wRdPtrP1)
+rptr_empty #( .ADDRSIZE (C_DEPTH_BITS) ) rptr_empty_i
+(
+    .rempty   (RD_EMPTY),
+    .raddr    (raddr),
+    .rptr     (rptr),
+    .rq2_wptr (rq2_wptr),
+    .rinc     (RD_EN),
+    .rclk     (RD_CLK),
+    .rrst     (RD_RST)
 );
 
-
-// Calculate empty
-rd_ptr_empty #(.C_DEPTH_BITS(C_DEPTH_BITS)) rdPtrEmpty (
-	.RD_EMPTY(RD_EMPTY), 
-	.RD_PTR(wRdPtr),
-	.RD_PTR_P1(wRdPtrP1),
-	.CMP_EMPTY(wCmpEmpty), 
-	.RD_EN(RD_EN),
-	.RD_CLK(RD_CLK), 
-	.RD_RST(RD_RST)
+wptr_full #( .ADDRSIZE (C_DEPTH_BITS) ) wptr_full_i
+(
+    .wfull    (WR_FULL),
+    .waddr    (waddr),
+    .wptr     (wptr),
+    .wq2_rptr (wq2_rptr),
+    .winc     (WR_EN),
+    .wclk     (WR_CLK),
+    .wrst     (WR_RST)
 );
-
-
-// Calculate full
-wr_ptr_full #(.C_DEPTH_BITS(C_DEPTH_BITS)) wrPtrFull (
-	.WR_CLK(WR_CLK), 
-	.WR_RST(WR_RST),
-	.WR_EN(WR_EN),
-	.WR_FULL(WR_FULL), 
-	.WR_PTR(wWrPtr),
-	.WR_PTR_P1(wWrPtrP1),
-	.CMP_FULL(wCmpFull)
-);
- 
 endmodule
 
-
-module async_cmp #(
-  parameter C_DEPTH_BITS = 4,
-  // Local parameters
-  parameter N = C_DEPTH_BITS-1
-)
-(
-	input WR_RST,
-	input WR_CLK,
-	input RD_RST,
-	input RD_CLK,
-	input RD_VALID,
-	input WR_VALID,
-	output EMPTY, 
-	output FULL, 
-	input [C_DEPTH_BITS-1:0] WR_PTR, 
-	input [C_DEPTH_BITS-1:0] RD_PTR, 
-	input [C_DEPTH_BITS-1:0] WR_PTR_P1, 
-	input [C_DEPTH_BITS-1:0] RD_PTR_P1
-);
-  
-reg				rDir=0;
-wire			wDirSet = (  (WR_PTR[N]^RD_PTR[N-1]) & ~(WR_PTR[N-1]^RD_PTR[N]));
-wire			wDirClr = ((~(WR_PTR[N]^RD_PTR[N-1]) &  (WR_PTR[N-1]^RD_PTR[N])) | WR_RST);
-
-reg				rRdValid=0;
-reg				rEmpty=1;
-reg				rFull=0;
-wire			wATBEmpty = ((WR_PTR == RD_PTR_P1) && (RD_VALID | rRdValid));
-wire			wATBFull = ((WR_PTR_P1 == RD_PTR) && WR_VALID);
-wire			wEmpty = ((WR_PTR == RD_PTR) && !rDir);
-wire			wFull = ((WR_PTR == RD_PTR) && rDir);
-
-assign EMPTY = wATBEmpty || rEmpty;
-assign FULL  = wATBFull || rFull;
-
-always @(posedge wDirSet or posedge wDirClr)
-if (wDirClr) 
-	rDir <= 1'b0;
-else
-	rDir <= 1'b1;
-
-always @(posedge RD_CLK) begin
-	rEmpty <= (RD_RST ? 1'd1 : wEmpty);
-	rRdValid <= (RD_RST ? 1'd0 : RD_VALID);
-end
-
-always @(posedge WR_CLK) begin
-	rFull <= (WR_RST ? 1'd0 : wFull);
-end
-
-endmodule 
- 
- 
-module rd_ptr_empty #(
-	parameter C_DEPTH_BITS = 4
-)
-(
-	input RD_CLK, 
-	input RD_RST,
-	input RD_EN, 
-	output RD_EMPTY,
-	output [C_DEPTH_BITS-1:0] RD_PTR,
-	output [C_DEPTH_BITS-1:0] RD_PTR_P1,
-	input CMP_EMPTY 
-);
-
-reg							rEmpty=1;
-reg							rEmpty2=1;
-reg		[C_DEPTH_BITS-1:0]	rRdPtr=0;
-reg		[C_DEPTH_BITS-1:0]	rRdPtrP1=0;
-reg		[C_DEPTH_BITS-1:0]	rBin=0;
-reg		[C_DEPTH_BITS-1:0]	rBinP1=1;
-wire	[C_DEPTH_BITS-1:0]	wGrayNext;
-wire	[C_DEPTH_BITS-1:0]	wGrayNextP1;
-wire	[C_DEPTH_BITS-1:0]	wBinNext;
-wire	[C_DEPTH_BITS-1:0]	wBinNextP1;
-
-assign RD_EMPTY = rEmpty;
-assign RD_PTR = rRdPtr;
-assign RD_PTR_P1 = rRdPtrP1;
-
-// Gray coded pointer
-always @(posedge RD_CLK or posedge RD_RST) begin
-	if (RD_RST) begin
-		rBin <= #1 0;
-		rBinP1 <= #1 1;
-		rRdPtr <= #1 0;
-		rRdPtrP1 <= #1 0;
-	end
-	else begin
-		rBin <= #1 wBinNext;
-		rBinP1 <= #1 wBinNextP1;
-		rRdPtr <= #1 wGrayNext;
-		rRdPtrP1 <= #1 wGrayNextP1;
-	end
-end
-
-// Increment the binary count if not empty
-assign wBinNext = (!rEmpty ? rBin + RD_EN : rBin);
-assign wBinNextP1 = (!rEmpty ? rBinP1 + RD_EN : rBinP1);
-assign wGrayNext = ((wBinNext>>1) ^ wBinNext); // binary-to-gray conversion
-assign wGrayNextP1 = ((wBinNextP1>>1) ^ wBinNextP1); // binary-to-gray conversion
-
-always @(posedge RD_CLK) begin
-	if (CMP_EMPTY)
-		{rEmpty, rEmpty2} <= #1 2'b11;
-	else
-		{rEmpty, rEmpty2} <= #1 {rEmpty2, CMP_EMPTY};
-end
-
+module rptr_empty #(parameter ADDRSIZE = 4)
+  (output reg                rempty,
+   output     [ADDRSIZE-1:0] raddr,
+   output reg [ADDRSIZE  :0] rptr,
+   input      [ADDRSIZE  :0] rq2_wptr,
+   input                     rinc, rclk, rrst);
+  reg  [ADDRSIZE:0] rbin;
+  wire [ADDRSIZE:0] rgraynext, rbinnext;
+  //-------------------
+  // GRAYSTYLE2 pointer
+  //-------------------
+  always @(posedge rclk or posedge rrst)
+    if (rrst) {rbin, rptr} <= 0;
+    else         {rbin, rptr} <= {rbinnext, rgraynext};
+  // Memory read-address pointer (okay to use binary to address memory)
+  assign raddr     = rbin[ADDRSIZE-1:0];
+  assign rbinnext  = rbin + (rinc & ~rempty);
+  assign rgraynext = (rbinnext>>1) ^ rbinnext;
+  //---------------------------------------------------------------
+  // FIFO empty when the next rptr == synchronized wptr or on reset
+  //---------------------------------------------------------------
+  assign rempty_val = (rgraynext == rq2_wptr);
+  always @(posedge rclk or posedge rrst)
+    if (rrst) rempty <= 1'b1;
+    else         rempty <= rempty_val;
 endmodule
- 
- 
-module wr_ptr_full #(
-	parameter C_DEPTH_BITS = 4
-)
-(
-	input WR_CLK, 
-	input WR_RST,
-	input WR_EN,
-	output WR_FULL, 
-	output [C_DEPTH_BITS-1:0] WR_PTR, 
-	output [C_DEPTH_BITS-1:0] WR_PTR_P1, 
-	input CMP_FULL
-);
 
-reg							rFull=0;
-reg							rFull2=0;
-reg		[C_DEPTH_BITS-1:0]	rPtr=0;
-reg		[C_DEPTH_BITS-1:0]	rPtrP1=0;
-reg		[C_DEPTH_BITS-1:0]	rBin=0;
-reg		[C_DEPTH_BITS-1:0]	rBinP1=1;
-wire	[C_DEPTH_BITS-1:0]	wGrayNext;
-wire	[C_DEPTH_BITS-1:0]	wGrayNextP1;
-wire	[C_DEPTH_BITS-1:0]	wBinNext;
-wire	[C_DEPTH_BITS-1:0]	wBinNextP1;
+module wptr_full  #(parameter ADDRSIZE = 4)
+  (output reg                wfull,
+   output     [ADDRSIZE-1:0] waddr,
+   output reg [ADDRSIZE  :0] wptr,
+   input      [ADDRSIZE  :0] wq2_rptr,
+   input                     winc, wclk, wrst);
+  reg  [ADDRSIZE:0] wbin;
+  wire [ADDRSIZE:0] wgraynext, wbinnext;
+  // GRAYSTYLE2 pointer
+  always @(posedge wclk or posedge wrst)
+    if (wrst) {wbin, wptr} <= 0;
+    else         {wbin, wptr} <= {wbinnext, wgraynext};
+  // Memory write-address pointer (okay to use binary to address memory)
+  assign waddr = wbin[ADDRSIZE-1:0];
+  assign wbinnext  = wbin + (winc & ~wfull);
+  assign wgraynext = (wbinnext>>1) ^ wbinnext;
+  //------------------------------------------------------------------
+  // Simplified version of the three necessary full-tests:
+  // assign wfull_val=((wgnext[ADDRSIZE]    !=wq2_rptr[ADDRSIZE]  ) &&
+  //                   (wgnext[ADDRSIZE-1]  !=wq2_rptr[ADDRSIZE-1]) &&
+  //                   (wgnext[ADDRSIZE-2:0]==wq2_rptr[ADDRSIZE-2:0]));
+  //------------------------------------------------------------------
+  assign wfull_val = (wgraynext=={~wq2_rptr[ADDRSIZE:ADDRSIZE-1],
+                                   wq2_rptr[ADDRSIZE-2:0]});
+  always @(posedge wclk or posedge wrst)
+    if (wrst) wfull  <= 1'b0;
+    else         wfull  <= wfull_val;
+endmodule
 
-assign WR_FULL = rFull;
-assign WR_PTR = rPtr;
-assign WR_PTR_P1 = rPtrP1;
+module sync_r2w #(parameter ADDRSIZE = 4)
+  ((*ASYNC_REG = "true" *)
+   output reg [ADDRSIZE:0] wq2_rptr,
+   input      [ADDRSIZE:0] rptr,
+   input                   wclk, wrst);
+  (*ASYNC_REG = "true" *) reg [ADDRSIZE:0] wq1_rptr;
+  always @(posedge wclk or posedge wrst)
+    if (wrst) {wq2_rptr,wq1_rptr} <= 0;
+    else         {wq2_rptr,wq1_rptr} <= {wq1_rptr,rptr};
+endmodule
 
-// Gray coded pointer
-always @(posedge WR_CLK or posedge WR_RST) begin
-	if (WR_RST) begin
-		rBin <= #1 0;
-		rBinP1 <= #1 1;
-		rPtr <= #1 0;
-		rPtrP1 <= #1 0;
-	end
-	else begin
-		rBin <= #1 wBinNext;
-		rBinP1 <= #1 wBinNextP1;
-		rPtr <= #1 wGrayNext;
-		rPtrP1 <= #1 wGrayNextP1;
-	end
-end
-
-// Increment the binary count if not full
-assign wBinNext = (!rFull ? rBin + WR_EN : rBin);
-assign wBinNextP1 = (!rFull ? rBinP1 + WR_EN : rBinP1);
-assign wGrayNext = ((wBinNext>>1) ^ wBinNext); // binary-to-gray conversion
-assign wGrayNextP1 = ((wBinNextP1>>1) ^ wBinNextP1); // binary-to-gray conversion
-
-always @(posedge WR_CLK) begin
-	if (WR_RST) 
-		{rFull, rFull2} <= #1 2'b00;
-	else if (CMP_FULL) 
-		{rFull, rFull2} <= #1 2'b11;
-	else
-		{rFull, rFull2} <= #1 {rFull2, CMP_FULL};
-end
-
+module sync_w2r #(parameter ADDRSIZE = 4)
+  (
+   (*ASYNC_REG = "true" *)
+   output reg [ADDRSIZE:0] rq2_wptr,
+   input      [ADDRSIZE:0] wptr,
+   input                   rclk, rrst);
+  (*ASYNC_REG = "true" *) reg [ADDRSIZE:0] rq1_wptr;
+  always @(posedge rclk or posedge rrst)
+    if (rrst)    {rq2_wptr,rq1_wptr} <= 0;
+    else         {rq2_wptr,rq1_wptr} <= {rq1_wptr,wptr};
 endmodule
 

@@ -45,13 +45,14 @@
 // History:				@mattj: Version 2.0
 //-----------------------------------------------------------------------------
 `timescale 1ns/1ns
+`include "functions.vh"
 module async_fifo_fwft #(
 	parameter C_WIDTH = 32,	// Data bus width
 	parameter C_DEPTH = 1024,	// Depth of the FIFO
 	// Local parameters
-	parameter C_REAL_DEPTH = 2**clog2(C_DEPTH),
-	parameter C_DEPTH_BITS = clog2s(C_REAL_DEPTH),
-	parameter C_DEPTH_P1_BITS = clog2s(C_REAL_DEPTH+1)
+	parameter C_REAL_DEPTH = 2**`clog2(C_DEPTH),
+	parameter C_DEPTH_BITS = `clog2s(C_REAL_DEPTH),
+	parameter C_DEPTH_P1_BITS = `clog2s(C_REAL_DEPTH+1)
 )
 (
 	input RD_CLK,							// Read clock
@@ -66,7 +67,6 @@ module async_fifo_fwft #(
 	output RD_EMPTY 						// Empty condition (RD_CLK)
 );
 
-`include "functions.vh"
 
 reg		[C_WIDTH-1:0]			rData=0;
 reg		[C_WIDTH-1:0]			rCache=0;

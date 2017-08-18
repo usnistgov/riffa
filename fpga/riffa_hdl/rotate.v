@@ -48,7 +48,7 @@ module rotate
       )
     (
      input [C_WIDTH-1:0]        WR_DATA,
-     input [clog2s(C_WIDTH)-1:0] WR_SHIFTAMT,
+     input [`clog2s(C_WIDTH)-1:0] WR_SHIFTAMT,
      output [C_WIDTH-1:0]       RD_DATA
      );
 

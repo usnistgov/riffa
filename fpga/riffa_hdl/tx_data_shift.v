@@ -88,9 +88,9 @@ module tx_data_shift
      input                               WR_TX_DATA_VALID,
      input [C_DATA_WIDTH-1:0]            WR_TX_DATA,
      input                               WR_TX_DATA_START_FLAG,
-     input [clog2s(C_DATA_WIDTH/32)-1:0] WR_TX_DATA_START_OFFSET,
+     input [`clog2s(C_DATA_WIDTH/32)-1:0] WR_TX_DATA_START_OFFSET,
      input                               WR_TX_DATA_END_FLAG,
-     input [clog2s(C_DATA_WIDTH/32)-1:0] WR_TX_DATA_END_OFFSET,
+     input [`clog2s(C_DATA_WIDTH/32)-1:0] WR_TX_DATA_END_OFFSET,
      output                              WR_TX_DATA_READY,
 
      // Interface: RD TX DATA
@@ -101,7 +101,7 @@ module tx_data_shift
      output [(C_DATA_WIDTH/32)-1:0]      RD_TX_DATA_END_FLAGS,
      output                              RD_TX_DATA_VALID
      );
-    localparam C_ROTATE_BITS = clog2s(C_DATA_WIDTH/32);
+    localparam C_ROTATE_BITS = `clog2s(C_DATA_WIDTH/32);
     localparam C_NUM_MUXES = (C_DATA_WIDTH/32);
     localparam C_SELECT_WIDTH = C_DATA_WIDTH/32;
     localparam C_MASK_WIDTH = C_DATA_WIDTH/32;
@@ -112,9 +112,9 @@ module tx_data_shift
     wire                                 wWrTxDataValid;
     wire [C_DATA_WIDTH-1:0]              wWrTxData;
     wire                                 wWrTxDataStartFlag;
-    wire [clog2s(C_DATA_WIDTH/32)-1:0]   wWrTxDataStartOffset;
+    wire [`clog2s(C_DATA_WIDTH/32)-1:0]   wWrTxDataStartOffset;
     wire                                 wWrTxDataEndFlag;
-    wire [clog2s(C_DATA_WIDTH/32)-1:0]   wWrTxDataEndOffset;
+    wire [`clog2s(C_DATA_WIDTH/32)-1:0]   wWrTxDataEndOffset;
     wire [(C_DATA_WIDTH/32)-1:0]         wWrTxEndFlagMask;
     wire [(C_DATA_WIDTH/32)-1:0]         wWrTxDataEndFlags;
     wire                                 wWrTxDataReady;
@@ -136,7 +136,7 @@ module tx_data_shift
     wire [C_SELECT_WIDTH-1:0]            wSelectRotated[C_NUM_MUXES-1:0];
 
     reg [C_SELECT_WIDTH-1:0]             rMuxSelect[C_NUM_MUXES-1:0],_rMuxSelect[C_NUM_MUXES-1:0];
-    reg [clog2s(C_DATA_WIDTH/32)-1:0]    rStartOffset,_rStartOffset;
+    reg [`clog2s(C_DATA_WIDTH/32)-1:0]    rStartOffset,_rStartOffset;
 
     assign wWrTxDataReady = wRdTxDataReady;
 
@@ -179,7 +179,7 @@ module tx_data_shift
     
     pipeline
         #(// Parameters
-          .C_WIDTH                      (C_DATA_WIDTH+2*(1+clog2s(C_DATA_WIDTH/32))),
+          .C_WIDTH                      (C_DATA_WIDTH+2*(1+`clog2s(C_DATA_WIDTH/32))),
           .C_USE_MEMORY                 (0),
           .C_DEPTH                      (C_PIPELINE_INPUT?1:0)
           /*AUTOINSTPARAM*/)
@@ -249,7 +249,7 @@ module tx_data_shift
          .RD_DATA                       (wRdTxEndFlagMask),
          // Inputs
          .WR_DATA                       (wWrTxEndFlagMask),
-         .WR_SHIFTAMT                   (rStartOffset[clog2s(C_DATA_WIDTH/32)-1:0])
+         .WR_SHIFTAMT                   (rStartOffset[`clog2s(C_DATA_WIDTH/32)-1:0])
          /*AUTOINST*/);
 
     // Determine the 1-hot dword end flag
@@ -262,7 +262,7 @@ module tx_data_shift
          // Outputs
          .RD_ONE_HOT                    (wWrTxDataEndFlags),
          // Inputs
-         .WR_OFFSET                     (wWrTxDataEndOffset[clog2s(C_DATA_WIDTH/32)-1:0]),
+         .WR_OFFSET                     (wWrTxDataEndOffset[`clog2s(C_DATA_WIDTH/32)-1:0]),
          .WR_FLAG                       (wWrTxDataEndFlag)
          /*AUTOINST*/);
 
@@ -278,7 +278,7 @@ module tx_data_shift
          .RD_DATA                       (wRdTxDataEndFlags),
          // Inputs
          .WR_DATA                       (wWrTxDataEndFlags),
-         .WR_SHIFTAMT                   (rStartOffset[clog2s(C_DATA_WIDTH/32)-1:0])
+         .WR_SHIFTAMT                   (rStartOffset[`clog2s(C_DATA_WIDTH/32)-1:0])
          /*AUTOINST*/);
 
     generate
