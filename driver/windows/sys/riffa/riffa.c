@@ -1549,7 +1549,7 @@ NTSTATUS RiffaStartDmaTransaction(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
 	IN UINT64 Length, IN UINT64 Offset, IN WDF_DMA_DIRECTION DmaDirection) {
 	NTSTATUS status = STATUS_SUCCESS;
     PVOID vaddr;
-    UINT64 length;
+    UINT64 length_local;
 
 	DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
 		"riffa: fpga:%s chnl:%d, starting txn (len:%lld, off:%lld, isSend?:%d)\n",
@@ -1561,13 +1561,13 @@ NTSTATUS RiffaStartDmaTransaction(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
         vaddr = ((UINT32 *)vaddr) + Offset;
 
         // Reduce the length by the offset amount
-        length = MmGetMdlByteCount(DevExt->Chnl[Chnl].Mdl);
-        length = (Length < length ? Length : length);
-        length = length - Offset;
+		length_local = MmGetMdlByteCount(DevExt->Chnl[Chnl].Mdl);
+		length_local = (Length < length_local ? Length : length_local);
+		length_local = length_local - Offset;
 
         // Reuse the DMA Transaction
         status = WdfDmaTransactionInitialize(DevExt->Chnl[Chnl].DmaTransaction,
-            RiffaEvtProgramDma, DmaDirection, DevExt->Chnl[Chnl].Mdl, vaddr, (size_t)length);
+            RiffaEvtProgramDma, DmaDirection, DevExt->Chnl[Chnl].Mdl, vaddr, (size_t)length_local);
         DevExt->Chnl[Chnl].DmaTransactionValid = TRUE;
         if(!NT_SUCCESS(status)) {
             DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,

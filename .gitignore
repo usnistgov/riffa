@@ -5,4 +5,8 @@
 riffa.VC.*
 **/.vs/**
 **/Win7Debug/**
+**/Win7Release/**
 **/Win8Debug/**
+**/Win8Release/**
+**/Win8.1Debug/**
+**/Win8.1Release/**
