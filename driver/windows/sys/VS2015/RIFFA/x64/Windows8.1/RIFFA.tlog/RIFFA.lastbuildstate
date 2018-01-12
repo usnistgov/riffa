@@ -1,0 +1,2 @@
+#TargetFrameworkVersion=v4.5:PlatformToolSet=WindowsKernelModeDriver10.0:EnableManagedIncrementalBuild=false:VCToolArchitecture=Native32Bit:WindowsTargetPlatformVersion=10.0.15063.0
+Windows8.1|x64|C:\Users\fcomb\Documents\GitHub\riffa\driver\windows\sys\New\|
