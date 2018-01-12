@@ -1411,7 +1411,7 @@ VOID RiffaCompleteRequest(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
 	// Stop the timer
 	WdfTimerStop(DevExt->Chnl[Chnl].Timer, FALSE);
 
-	// Releas the transaction
+	// Release the transaction
 	WdfDmaTransactionRelease(DevExt->Chnl[Chnl].DmaTransaction);
 	DevExt->Chnl[Chnl].DmaTransactionValid = FALSE;
 
@@ -1555,36 +1555,39 @@ NTSTATUS RiffaStartDmaTransaction(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
 		"riffa: fpga:%s chnl:%d, starting txn (len:%lld, off:%lld, isSend?:%d)\n",
 		DevExt->Name, (Chnl < RIFFA_MAX_NUM_CHNLS ? Chnl : Chnl - RIFFA_MAX_NUM_CHNLS),
 		Length>>2, Offset, DmaDirection == WdfDmaDirectionWriteToDevice);
+    do{
+        // Move the virtual address forward to the offset
+        vaddr = MmGetMdlVirtualAddress(DevExt->Chnl[Chnl].Mdl);
+        vaddr = ((UINT32 *)vaddr) + Offset;
 
-	// Move the virtual address forward to the offset
-	vaddr = MmGetMdlVirtualAddress(DevExt->Chnl[Chnl].Mdl);
-	vaddr = ((UINT32 *)vaddr) + Offset;
+        // Reduce the length by the offset amount
+        length = MmGetMdlByteCount(DevExt->Chnl[Chnl].Mdl);
+        length = (Length < length ? Length : length);
+        length = length - Offset;
 
-	// Reduce the length by the offset amount
-	length = MmGetMdlByteCount(DevExt->Chnl[Chnl].Mdl);
-	length = (Length < length ? Length : length);
-	length = length - Offset;
+        // Reuse the DMA Transaction
+        status = WdfDmaTransactionInitialize(DevExt->Chnl[Chnl].DmaTransaction,
+            RiffaEvtProgramDma, DmaDirection, DevExt->Chnl[Chnl].Mdl, vaddr, (size_t)length);
+        DevExt->Chnl[Chnl].DmaTransactionValid = TRUE;
+        if(!NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+                "riffa: fpga:%s chnl:%d, WdfDmaTransactionInitialize failed\n",
+                DevExt->Name, (Chnl < RIFFA_MAX_NUM_CHNLS ? Chnl : Chnl - RIFFA_MAX_NUM_CHNLS));
+            break;
+        }
 
-	// Reuse the DMA Transaction
-	status = WdfDmaTransactionInitialize(DevExt->Chnl[Chnl].DmaTransaction,
-		RiffaEvtProgramDma, DmaDirection, DevExt->Chnl[Chnl].Mdl, vaddr, (size_t)length);
-	DevExt->Chnl[Chnl].DmaTransactionValid = TRUE;
-	if(!NT_SUCCESS(status)) {
-		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
-			"riffa: fpga:%s chnl:%d, WdfDmaTransactionInitialize failed\n",
-			DevExt->Name, (Chnl < RIFFA_MAX_NUM_CHNLS ? Chnl : Chnl - RIFFA_MAX_NUM_CHNLS));
-		return status;
-	}
-
-	// Execute the transaction
-	status = WdfDmaTransactionExecute(DevExt->Chnl[Chnl].DmaTransaction,
-		(WDFCONTEXT)Chnl);
-	if (!NT_SUCCESS(status)) {
-		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+        // Execute the transaction
+        status = WdfDmaTransactionExecute(DevExt->Chnl[Chnl].DmaTransaction,
+            (WDFCONTEXT)Chnl);
+        if (!NT_SUCCESS(status)) {
+            DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
 			"riffa: fpga:%s chnl:%d, WdfDmaTransactionExecute failed\n",
 			DevExt->Name, (Chnl < RIFFA_MAX_NUM_CHNLS ? Chnl : Chnl - RIFFA_MAX_NUM_CHNLS));
-		WdfDmaTransactionRelease(DevExt->Chnl[Chnl].DmaTransaction);
-		return status;
+        }
+        break;
+    while (0)
+	if (!NT_SUCCESS(status)) {
+		WdfDmaTransactionRelease(DevExt->Chnl[Chnl].DmaTransaction);		
 	}
 
 	return status;
@@ -1596,6 +1599,11 @@ NTSTATUS RiffaStartDmaTransaction(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
  * Programs the device with scatter gather data. Will program the device with
  * spill buffer data (as scatter gather buffers) if the DMA length will overrun
  * the receptical user buffer.
+ *
+ * This function is called by the EvtProgramDma; a single transaction
+ * initiated by calling WdfDmaTransactionExecute may result in multiple
+ * calls to this function if the buffer is too large and there aren't
+ * enough map registers to do the whole transfer.
  *
  * DevExt - Pointer to the Device Extension
  *
@@ -1651,7 +1659,10 @@ VOID RiffaProgramScatterGather(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl) {
     DevExt->Chnl[Chnl].ProvidedPrev = provided - DevExt->Chnl[Chnl].Provided;
 	DevExt->Chnl[Chnl].Provided = provided;
 	DevExt->Chnl[Chnl].SgPos = pos;
-
+    
+    // Acquire this device's InterruptSpinLock.
+    WdfInterruptAcquireLock( DevExt->Interrupt );
+    
 	if (i > 0) {
 		// Let the device know about the new scatter gather data.
 		if (Chnl < RIFFA_MAX_NUM_CHNLS) {
@@ -1696,7 +1707,8 @@ VOID RiffaProgramScatterGather(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl) {
 				"riffa: fpga:%s chnl:%d, splitting recv txn\n", DevExt->Name, Chnl - RIFFA_MAX_NUM_CHNLS));
 		}
 	}
-
+    // Release our interrupt spinlock    
+    WdfInterruptReleaseLock( DevExt->Interrupt );
 	// Start the timer (if necessary)
 	if (DevExt->Chnl[Chnl].Timeout > 0)
 		WdfTimerStart(DevExt->Chnl[Chnl].Timer, WDF_REL_TIMEOUT_IN_MS(DevExt->Chnl[Chnl].Timeout));
@@ -1724,8 +1736,7 @@ VOID RiffaTransactionComplete(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
 	// Stop the timer (if set)
 	WdfTimerStop(DevExt->Chnl[Chnl].Timer, FALSE);
 
-	// Release the DMA Transaction (ok to call this multiple times)
-	WdfDmaTransactionRelease(DevExt->Chnl[Chnl].DmaTransaction);
+
 	DevExt->Chnl[Chnl].DmaTransactionValid = FALSE;
 	if (Chnl < RIFFA_MAX_NUM_CHNLS) {
 		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
@@ -1733,7 +1744,8 @@ VOID RiffaTransactionComplete(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
 
 		// Update the total confirmed data
 		DevExt->Chnl[Chnl].Confirmed = (((UINT64)Transferred)<<2);
-
+        // Release the DMA Transaction (ok to call this multiple times)
+        WdfDmaTransactionRelease(DevExt->Chnl[Chnl].DmaTransaction);
 		// Complete the send request
 		RiffaCompleteRequest(DevExt, Chnl, Status, FALSE);
 	}
@@ -1746,7 +1758,8 @@ VOID RiffaTransactionComplete(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl,
 		if (DevExt->Chnl[Chnl].Last || !NT_SUCCESS(Status)) {
 			// Update the total confirmed data
 			DevExt->Chnl[Chnl].Confirmed = (((UINT64)Transferred)<<2);
-
+            // Release the DMA Transaction (ok to call this multiple times)
+            WdfDmaTransactionRelease(DevExt->Chnl[Chnl].DmaTransaction);
 			// Complete the receive request
 			RiffaCompleteRequest(DevExt, Chnl, Status, FALSE);
 		}
@@ -1845,6 +1858,132 @@ BOOLEAN RiffaEvtProgramDma(IN WDFDMATRANSACTION Transaction, IN WDFDEVICE Device
 	RiffaProgramScatterGather(devExt, chnl);
 
     return TRUE;
+}
+NTSTATUS
+RiffaEvtDeviceD0Entry(
+    IN  WDFDEVICE Device,
+    IN  WDF_POWER_DEVICE_STATE PreviousState
+    )
+/*++
+
+Routine Description:
+
+    This routine prepares the device for use.  It is called whenever the device
+    enters the D0 state, which happens when the device is started, when it is
+    restarted, and when it has been powered off.
+
+    Note that interrupts will not be enabled at the time that this is called.
+    They will be enabled after this callback completes.
+
+    This function is not marked pageable because this function is in the
+    device power up path. When a function is marked pagable and the code
+    section is paged out, it will generate a page fault which could impact
+    the fast resume behavior because the client driver will have to wait
+    until the system drivers can service this page fault.
+
+Arguments:
+
+    Device  - The handle to the WDF device object
+
+    PreviousState - The state the device was in before this callback was invoked.
+
+Return Value:
+
+    NTSTATUS
+
+    Success implies that the device can be used.
+
+    Failure will result in the    device stack being torn down.
+
+--*/
+{
+    PDEVICE_EXTENSION   devExt;
+    NTSTATUS            status;
+
+    UNREFERENCED_PARAMETER(PreviousState);
+
+    devExt = RiffaGetDeviceContext(Device);
+
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+        "riffa: fpga:%s D0 state entered\n", devExt->Name);
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS
+RiffaEvtDeviceD0Exit(
+    IN  WDFDEVICE Device,
+    IN  WDF_POWER_DEVICE_STATE TargetState
+    )
+/*++
+
+Routine Description:
+
+    This routine undoes anything done in RiffaEvtDeviceD0Entry.  It is called
+    whenever the device leaves the D0 state, which happens when the device
+    is stopped, when it is removed, and when it is powered off.
+
+    The device is still in D0 when this callback is invoked, which means that
+    the driver can still touch hardware in this routine.
+
+    Note that interrupts have already been disabled by the time that this
+    callback is invoked.
+
+Arguments:
+
+    Device  - The handle to the WDF device object
+
+    TargetState - The state the device will go to when this callback completes.
+
+Return Value:
+
+    Success implies that the device can be used.  Failure will result in the
+    device stack being torn down.
+
+--*/
+{
+    PDEVICE_EXTENSION   devExt;
+
+    PAGED_CODE();
+
+    devExt = RiffaGetDeviceContext(Device);
+    DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,
+        "riffa: fpga:%s D0 state left\n", devExt->Name);
+    switch (TargetState) {
+    case WdfPowerDeviceD1:
+    case WdfPowerDeviceD2:
+    case WdfPowerDeviceD3:
+
+        //
+        // Fill in any code to save hardware state here.
+        //
+
+        //
+        // Fill in any code to put the device in a low-power state here.
+        //
+        break;
+
+    case WdfPowerDevicePrepareForHibernation:
+
+        //
+        // Fill in any code to save hardware state here.  Do not put in any
+        // code to shut the device off.  If this device cannot support being
+        // in the paging path (or being a parent or grandparent of a paging
+        // path device) then this whole case can be deleted.
+        //
+
+        break;
+
+    case WdfPowerDeviceD3Final:
+    default:
+
+        //
+        // Reset the hardware, as we're shutting down for the last time.
+        //
+        // RiffaShutdown(devExt); Does not yet exist
+        break;
+    }
+
+    return STATUS_SUCCESS;
 }
 /**
 * Log a message to the system event log

@@ -182,6 +182,9 @@ VOID RiffaProgramSend(IN PDEVICE_EXTENSION DevExt, IN UINT32 Chnl, IN UINT32 Len
 	IN UINT32 Offset, IN UINT32 Last);
 EVT_WDF_PROGRAM_DMA RiffaEvtProgramDma;
 
+NTSTATUS RiffaEvtDeviceD0Exit( IN  WDFDEVICE Device, IN  WDF_POWER_DEVICE_STATE TargetState );
+NTSTATU  RiffaEvtDeviceD0Entry( IN  WDFDEVICE Device, IN  WDF_POWER_DEVICE_STATE PreviousState );
+
 BOOLEAN RiffaLogError(
 	_In_							 PDRIVER_OBJECT Device,
 	_In_                             NTSTATUS SpecificIOStatus,

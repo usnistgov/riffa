@@ -1,0 +1,8 @@
+*~
+*.lock
+*.backup
+*.log
+riffa.VC.*
+**/.vs/**
+**/Win7Debug/**
+**/Win8Debug/**
