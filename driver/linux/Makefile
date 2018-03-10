@@ -45,7 +45,10 @@
 # header. Xilinx has a VENDOR_ID = 10EE.
 NAME := riffa
 VENDOR_ID0 := 10EE
-VENDOR_ID1 := 1172
+# Comment JD 2021-01-29: VENDOR_ID1 appears to be what is more commonly known as the "PCI Device ID".
+# we have to set it to the same value as specified when building the FPGA bitfile,
+# which seems to come from the value MODELPARAM_VALUE.dev_id in PCIeGen2x4If128.xci
+VENDOR_ID1 := 7024
 MAJNUM := 240
 
 # Build variables
@@ -98,7 +101,7 @@ $(NAME).ko: *.c *.h
 	sed -i 's/#define VENDOR_ID1 [^\n]*/#define VENDOR_ID1 0x$(VENDOR_ID1)/g' $(DRVR_HDR)
 	sed -i 's/#define DEBUG [^\n]*/#define DBUG 1/g' $(DRVR_HDR)
 	sed -i 's/#define DBUG [^\n]*/#define $(DBUGVAL) 1/g' $(DRVR_HDR)
-	make -C $(KDIR) SUBDIRS=`pwd` modules
+	make -C $(KDIR) M=$(shell pwd) modules
 	rm -rf $(LIB_OBJS)
 
 $(NAME).so.$(LIB_VER): $(LIB_OBJS)
