@@ -43,6 +43,7 @@
 #ifndef RIFFA_H
 #define RIFFA_H
 
+
 // Must RIFFA_EXPORTS *only* when building the DLL.
 #ifdef RIFFA_EXPORTS
   #define RIFFAAPI __declspec(dllexport)
@@ -130,6 +131,8 @@ RIFFAAPI int RIFFACALL fpga_recv(fpga_t * fpga, int chnl, void * data, int len,
 	long long timeout);
 RIFFAAPI int RIFFACALL fpga_recv_with_status(fpga_t * fpga, int chnl, void * data, int len,
 	long long timeout, int * sts);
+/* Helper function from Microsoft for displaying a windows API error message*/
+RIFFAAPI void DisplayError(LPTSTR);
 /**
  * Resets the state of the FPGA and all transfers across all channels. This is
  * meant to be used as an alternative to rebooting if an error occurs while

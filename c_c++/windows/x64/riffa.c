@@ -43,11 +43,15 @@
 #define INITGUID
 
 #include <windows.h>
-#include <setupapi.h>
+#include <strsafe.h>
+#include <SetupAPI.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "riffa_driver.h"
 #include "riffa.h"
+
+// Tell VS2015+ to link to the Setup API library (contains the SetupDixxx functions)
+#pragma comment(lib, "Setupapi.lib")
 
 // The structure used to hold data transfer information
 typedef struct RIFFA_FPGA_CHNL_IO {
@@ -366,7 +370,8 @@ HANDLE get_device(UINT32 index, BOOLEAN overlapped) {
     devInfo = SetupDiGetClassDevs(&GUID_RIFFA_INTERFACE, NULL, NULL,
     	DIGCF_DEVICEINTERFACE | DIGCF_PRESENT);
 	if (devInfo == INVALID_HANDLE_VALUE) {
-        printf("SetupDiGetClassDevs failed, Error: %d\n", GetLastError());
+		DisplayError(TEXT("get_device"));
+        //printf("SetupDiGetClassDevs failed, Error: %d\n", GetLastError());
         return INVALID_HANDLE_VALUE;
 	}
 
@@ -426,8 +431,9 @@ HANDLE get_device(UINT32 index, BOOLEAN overlapped) {
 		return INVALID_HANDLE_VALUE;
 	}
 	free(devIntfDetail);
-	SetupDiDestroyDeviceInfoList(devInfo);
-
+	status = SetupDiDestroyDeviceInfoList(devInfo);
+	if (!status)
+		DisplayError(TEXT("get_device->SetupDiDestroyDeviceInfoList"));
     return dev;
 }
 
@@ -527,3 +533,35 @@ DWORD fill_device_info(fpga_info_list * info) {
 
 
 
+void DisplayError(LPTSTR lpszFunction)
+{
+	// Retrieve the system error message for the last-error code
+
+	LPVOID lpMsgBuf;
+	LPVOID lpDisplayBuf;
+	DWORD dw = GetLastError();
+
+	FormatMessage(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER |
+		FORMAT_MESSAGE_FROM_SYSTEM |
+		FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL,
+		dw,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPTSTR)&lpMsgBuf,
+		0, NULL);
+
+	// Display the error message /*and exit the process*/
+
+	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT,
+		(lstrlen((LPCTSTR)lpMsgBuf) + lstrlen((LPCTSTR)lpszFunction) + 40) * sizeof(TCHAR));
+	StringCchPrintf((LPTSTR)lpDisplayBuf,
+		LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+		TEXT("%s failed with error %d: %s"),
+		lpszFunction, dw, lpMsgBuf);
+	MessageBox(NULL, (LPCTSTR)lpDisplayBuf, TEXT("Error"), MB_OK);
+
+	LocalFree(lpMsgBuf);
+	LocalFree(lpDisplayBuf);
+	/* ExitProcess(dw); */
+}
