@@ -11,3 +11,5 @@ riffa.VC.*
 **/Win8.1Debug/**
 **/Win8.1Release/**
 **/Windows8.1/**
+*.o
+*.ko
