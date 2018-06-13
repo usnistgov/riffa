@@ -97,6 +97,22 @@ int fpga_send(fpga_t * fpga, int chnl, void * data, int len, int destoff,
 	return ioctl(fpga->fd, IOCTL_SEND, &io);
 }
 
+int fpga_send_with_status(fpga_t * fpga, int chnl, void * data, int len, int destoff, 
+			  int last, long long timeout, int* sts)
+{
+	fpga_chnl_io io;
+
+	io.id = fpga->id;
+	io.chnl = chnl;
+	io.len = len;
+	io.offset = destoff;
+	io.last = last;
+	io.timeout = timeout;
+	io.data = (char *)data;
+	*sts = 0;
+	return ioctl(fpga->fd, IOCTL_SEND, &io);
+}
+
 int fpga_recv(fpga_t * fpga, int chnl, void * data, int len, long long timeout)
 {
 	fpga_chnl_io io;
@@ -107,6 +123,18 @@ int fpga_recv(fpga_t * fpga, int chnl, void * data, int len, long long timeout)
 	io.timeout = timeout;
 	io.data = (char *)data;
 
+	return ioctl(fpga->fd, IOCTL_RECV, &io);
+}
+int fpga_recv_with_status(fpga_t * fpga, int chnl, void * data, int len, long long timeout, int *sts)
+{
+	fpga_chnl_io io;
+
+	io.id = fpga->id;
+	io.chnl = chnl;
+	io.len = len;
+	io.timeout = timeout;
+	io.data = (char *)data;
+	*sts = 0;
 	return ioctl(fpga->fd, IOCTL_RECV, &io);
 }
 

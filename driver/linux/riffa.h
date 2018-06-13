@@ -87,6 +87,8 @@ void fpga_close(fpga_t * fpga);
  */
 int fpga_send(fpga_t * fpga, int chnl, void * data, int len, int destoff, 
 	int last, long long timeout);
+int fpga_send_with_status(fpga_t * fpga, int chnl, void * data, int len, int destoff, 
+			  int last, long long timeout, int* sts);
 
 /**
  * Receives data from the FPGA channel chnl to the data pointer, using the 
@@ -104,6 +106,7 @@ int fpga_send(fpga_t * fpga, int chnl, void * data, int len, int destoff,
  * returns a negative value. 
  */
 int fpga_recv(fpga_t * fpga, int chnl, void * data, int len, long long timeout);
+  int fpga_recv_with_status(fpga_t * fpga, int chnl, void * data, int len, long long timeout, int* sts);
 
 /**
  * Resets the state of the FPGA and all transfers across all channels. This is

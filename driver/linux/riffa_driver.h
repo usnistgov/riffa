@@ -49,6 +49,8 @@
 
 #define DBUG 1
 
+#include <linux/version.h>
+
 #ifdef DEBUG
 #define DEBUG_MSG(...) printk(__VA_ARGS__)
 #else
