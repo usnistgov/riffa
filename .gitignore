@@ -13,3 +13,11 @@ riffa.VC.*
 **/Windows8.1/**
 *.o
 *.ko
+
+# Linux specific ignores
+modules.order
+riffa_driver.o.ur-safe
+*.o.cmd
+*.ko.cmd
+.cache.mk
+**/.tmp_versions/**
