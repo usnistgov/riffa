@@ -46,7 +46,7 @@
 NAME := riffa
 VENDOR_ID0 := 10EE
 VENDOR_ID1 := 1172
-MAJNUM := 100
+MAJNUM := 240
 
 # Build variables
 KVER := $(shell uname -r)
@@ -131,9 +131,11 @@ install: $(NAME).so.$(LIB_VER) $(NAME).ko
 	fi
 	printf "%b\n" "KERNEL==\"$(NAME)\", MODE=\"777\", GROUP=\"root\"" > /etc/udev/rules.d/99-$(NAME).rules
 	printf "/usr/local/lib\n" > $(NAME).conf
+	chmod a+r $(NAME).conf
 	mv $(NAME).conf /etc/ld.so.conf.d/
 	cp $(DRVR_HDR) /usr/local/include/
 	cp $(LIB_HDR) /usr/local/include/
+	chmod a+rx lib$(NAME).so.1.0
 	mv lib$(NAME).so.1.0 /usr/local/lib
 	ln -sf /usr/local/lib/lib$(NAME).so.$(LIB_VER) /usr/local/lib/lib$(NAME).so.$(LIB_VER_MAJ)
 	ln -sf /usr/local/lib/lib$(NAME).so.$(LIB_VER) /usr/local/lib/lib$(NAME).so
