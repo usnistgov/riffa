@@ -1,6 +1,9 @@
+#include <linux/build-salt.h>
 #include <linux/module.h>
 #include <linux/vermagic.h>
 #include <linux/compiler.h>
+
+BUILD_SALT;
 
 MODULE_INFO(vermagic, VERMAGIC_STRING);
 MODULE_INFO(name, KBUILD_MODNAME);
@@ -15,7 +18,7 @@ __attribute__((section(".gnu.linkonce.this_module"))) = {
 	.arch = MODULE_ARCH_INIT,
 };
 
-#ifdef RETPOLINE
+#ifdef CONFIG_RETPOLINE
 MODULE_INFO(retpoline, "Y");
 #endif
 
@@ -27,4 +30,4 @@ __attribute__((section(".modinfo"))) =
 MODULE_ALIAS("pci:v000010EEd*sv*sd*bc*sc*i*");
 MODULE_ALIAS("pci:v00001172d*sv*sd*bc*sc*i*");
 
-MODULE_INFO(srcversion, "AABC744D73E0D687DCA8FB6");
+MODULE_INFO(srcversion, "89AE637C9DCB65D15E90766");

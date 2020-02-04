@@ -60,7 +60,7 @@
 
 // The major device number. We can't rely on dynamic registration because ioctls
 // need to know it.
-#define MAJOR_NUM 100
+#define MAJOR_NUM 240
 #define DEVICE_NAME "riffa"
 #define VENDOR_ID0 0x10EE
 #define VENDOR_ID1 0x1172
